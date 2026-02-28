@@ -2,7 +2,12 @@ import { useState, useRef, useEffect } from 'react';
 import { Home, Info, Play, Square, Phone, Settings, Menu, X, Sun, Moon } from 'lucide-react';
 
 export default function App() {
-  const [apiKey] = useState(import.meta.env.VITE_OPENAI_API_KEY || '');
+  const [apiKey, setApiKey] = useState(() => {
+    // Check localStorage first, otherwise fallback to env variable
+    return localStorage.getItem('openai_api_key') || import.meta.env.VITE_OPENAI_API_KEY || '';
+  });
+  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(!apiKey);
+
   const [isSessionActive, setIsSessionActive] = useState(false);
   const [currentScreen, setCurrentScreen] = useState<'home' | 'about' | 'contact'>('home');
   const [language, setLanguage] = useState('English');
@@ -33,7 +38,8 @@ export default function App() {
 
   const initSession = async () => {
     if (!apiKey) {
-      setError("Please provide an OpenAI API key in the .env file (VITE_OPENAI_API_KEY).");
+      setIsApiKeyModalOpen(true);
+      setError("Please provide an OpenAI API key to start.");
       return;
     }
     setError(null);
@@ -230,6 +236,51 @@ export default function App() {
       {/* Background decoration */}
       <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-blue-500/10 dark:bg-blue-900/20 blur-[120px] rounded-full pointer-events-none" />
       <div className="absolute bottom-[-20%] right-[-10%] w-[40%] h-[40%] bg-purple-500/10 dark:bg-purple-900/20 blur-[120px] rounded-full pointer-events-none" />
+
+      {/* API Key Modal */}
+      {isApiKeyModalOpen && (
+        <div className="fixed inset-0 bg-neutral-950/80 backdrop-blur-md z-[100] flex items-center justify-center p-6 animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-neutral-900 p-8 md:p-10 rounded-3xl border border-neutral-200 dark:border-neutral-800 shadow-2xl max-w-md w-full ring-1 ring-white/10 dark:ring-white/5">
+            <h2 className="text-2xl font-bold text-neutral-900 dark:text-white mb-2">Configure API Key</h2>
+            <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-8 leading-relaxed">
+              We couldn't detect a built-in API key. To use the Realtime AI Navigator features, please enter your <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer" className="text-blue-500 hover:underline">OpenAI API Key</a>. It will be stored securely in your browser's local storage.
+            </p>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-2">OpenAI Secret Key</label>
+                <input
+                  type="password"
+                  value={apiKey}
+                  onChange={(e) => setApiKey(e.target.value)}
+                  className="w-full bg-neutral-50 dark:bg-neutral-950 border border-neutral-300 dark:border-neutral-800 rounded-xl px-4 py-3 text-neutral-900 dark:text-white focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all"
+                  placeholder="sk-..."
+                />
+              </div>
+              <button
+                onClick={() => {
+                  if (apiKey.trim()) {
+                    localStorage.setItem('openai_api_key', apiKey.trim());
+                    setIsApiKeyModalOpen(false);
+                    setError(null);
+                  }
+                }}
+                disabled={!apiKey.trim()}
+                className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-2"
+              >
+                Save & Continue
+              </button>
+            </div>
+            <div className="mt-6 pt-6 border-t border-neutral-200 dark:border-neutral-800 flex justify-center">
+              <button 
+                onClick={() => setIsApiKeyModalOpen(false)}
+                className="text-xs text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300 font-medium transition-colors"
+              >
+                Cancel and Browse
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* Mobile Menu Overlay */}
       {isMobileMenuOpen && (

@@ -22,6 +22,10 @@ export default function App() {
   const [voice, setVoice] = useState('verse');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // Form State
+  const [contactName, setContactName] = useState('');
+  const [contactMessage, setContactMessage] = useState('');
   
   const [theme, setTheme] = useState<'light' | 'dark'>('dark');
 
@@ -63,7 +67,7 @@ export default function App() {
   };
 
   const getInstructions = (lang: string) => {
-    return `You are a helpful assistant. You must ONLY converse in ${lang}. You can control the screen navigation via the \`change_screen\` tool. Respond succinctly without extra conversational filler. Navigate to the screen requested by the user.`;
+    return `You are a helpful assistant. You must ONLY converse in ${lang}. You can control the screen navigation via the \`change_screen\` tool, you can switch the visual theme between light and dark modes using the \`change_theme\` tool, and you can fill out the contact form automatically using the \`fill_contact_form\` tool. Respond succinctly without extra conversational filler. If a user asks to contact you, navigate them to the 'contact' screen first, then ask them for their name or message, and finally use the tool to populate the form on their screen.`;
   };
 
   const initSession = async () => {
@@ -99,6 +103,41 @@ export default function App() {
                   }
                 },
                 required: ["screen"]
+              }
+            },
+            {
+              type: "function",
+              name: "change_theme",
+              description: "Change the application theme to either 'light' or 'dark'.",
+              parameters: {
+                type: "object",
+                properties: {
+                  theme: {
+                    type: "string",
+                    enum: ["light", "dark"],
+                    description: "The theme to switch to."
+                  }
+                },
+                required: ["theme"]
+              }
+            },
+            {
+              type: "function",
+              name: "fill_contact_form",
+              description: "Populate the Name and Message fields on the Contact Us form.",
+              parameters: {
+                type: "object",
+                properties: {
+                  name: {
+                    type: "string",
+                    description: "The name of the user."
+                  },
+                  message: {
+                    type: "string",
+                    description: "The message the user wishes to send."
+                  }
+                },
+                required: ["name", "message"]
               }
             }
           ],
@@ -160,6 +199,35 @@ export default function App() {
                 }));
                 dc.send(JSON.stringify({ type: "response.create" }));
               }
+            } else if (serverEvent.name === 'change_theme') {
+              const args = JSON.parse(serverEvent.arguments);
+              if (args.theme === 'light' || args.theme === 'dark') {
+                setTheme(args.theme as 'light' | 'dark');
+                
+                dc.send(JSON.stringify({
+                  type: "conversation.item.create",
+                  item: {
+                    type: "function_call_output",
+                    call_id: serverEvent.call_id,
+                    output: `{"success": true, "message": "Theme changed to ${args.theme}"}`
+                  }
+                }));
+                dc.send(JSON.stringify({ type: "response.create" }));
+              }
+            } else if (serverEvent.name === 'fill_contact_form') {
+              const args = JSON.parse(serverEvent.arguments);
+              setContactName(args.name || '');
+              setContactMessage(args.message || '');
+              
+              dc.send(JSON.stringify({
+                type: "conversation.item.create",
+                item: {
+                  type: "function_call_output",
+                  call_id: serverEvent.call_id,
+                  output: `{"success": true, "message": "Contact form populated with Name: ${args.name} and Message: ${args.message}"}`
+                }
+              }));
+              dc.send(JSON.stringify({ type: "response.create" }));
             }
           }
           
@@ -260,6 +328,37 @@ export default function App() {
       }
     }
   }, [language, isSessionActive]);
+
+  useEffect(() => {
+    if (isSessionActive && dcRef.current && dcRef.current.readyState === 'open') {
+      try {
+        dcRef.current.send(JSON.stringify({
+          type: "session.update",
+          session: {
+            voice: voice
+          }
+        }));
+        
+        // Trigger a response from the AI acknowledging the voice change
+        dcRef.current.send(JSON.stringify({
+          type: "conversation.item.create",
+          item: {
+            type: "message",
+            role: "user",
+            content: [
+              {
+                type: "input_text",
+                text: `The system voice has been changed to ${voice}. Please acknowledge this change and say a brief greeting so the user can hear your new voice.`
+              }
+            ]
+          }
+        }));
+        dcRef.current.send(JSON.stringify({ type: "response.create" }));
+      } catch (err) {
+        console.error("Failed to update session voice", err);
+      }
+    }
+  }, [voice, isSessionActive]);
 
   return (
     <div className="fixed inset-0 flex flex-col bg-neutral-50 dark:bg-neutral-900 text-neutral-900 dark:text-neutral-100 font-sans overflow-hidden transition-colors duration-300">
@@ -394,11 +493,11 @@ export default function App() {
         </div>
       </header>
 
-      <main className="flex-1 overflow-y-auto w-full p-6 md:p-12 flex flex-col items-center justify-start relative z-10 overscroll-y-contain [WebkitOverflowScrolling:touch]">
+      <main className="flex-1 overflow-y-auto w-full p-4 sm:p-6 md:p-12 flex flex-col items-center justify-start relative z-10 overscroll-y-contain [WebkitOverflowScrolling:touch]">
         <div className="w-full max-w-4xl relative">
           
           {currentScreen === 'home' && (
-            <div ref={screenRef} className="bg-white/60 dark:bg-neutral-900/60 p-10 md:p-16 rounded-[2rem] border border-neutral-200/60 dark:border-neutral-800/60 shadow-2xl backdrop-blur-xl">
+            <div ref={screenRef} className="bg-white/60 dark:bg-neutral-900/60 p-6 sm:p-10 md:p-16 rounded-3xl md:rounded-[2rem] border border-neutral-200/60 dark:border-neutral-800/60 shadow-2xl backdrop-blur-xl">
               <div className="h-16 w-16 bg-gradient-to-br from-blue-500/20 to-blue-600/10 rounded-2xl flex items-center justify-center mb-8 border border-blue-500/20 shadow-inner">
                 <Home className="text-blue-500 dark:text-blue-400" size={32} />
               </div>
@@ -422,7 +521,7 @@ export default function App() {
           )}
 
           {currentScreen === 'about' && (
-            <div ref={screenRef} className="bg-white/60 dark:bg-neutral-900/60 p-10 md:p-16 rounded-[2rem] border border-purple-200/50 dark:border-purple-800/20 shadow-2xl backdrop-blur-xl">
+            <div ref={screenRef} className="bg-white/60 dark:bg-neutral-900/60 p-6 sm:p-10 md:p-16 rounded-3xl md:rounded-[2rem] border border-purple-200/50 dark:border-purple-800/20 shadow-2xl backdrop-blur-xl">
               <div className="h-16 w-16 bg-gradient-to-br from-purple-500/20 to-purple-600/10 rounded-2xl flex items-center justify-center mb-8 border border-purple-500/20 shadow-inner">
                 <Info className="text-purple-500 dark:text-purple-400" size={32} />
               </div>
@@ -446,7 +545,7 @@ export default function App() {
           )}
 
           {currentScreen === 'contact' && (
-            <div ref={screenRef} className="bg-white/60 dark:bg-neutral-900/60 p-10 md:p-16 rounded-[2rem] border border-orange-200/50 dark:border-orange-800/20 shadow-2xl backdrop-blur-xl">
+            <div ref={screenRef} className="bg-white/60 dark:bg-neutral-900/60 p-6 sm:p-10 md:p-16 rounded-3xl md:rounded-[2rem] border border-orange-200/50 dark:border-orange-800/20 shadow-2xl backdrop-blur-xl">
               <div className="h-16 w-16 bg-gradient-to-br from-orange-500/20 to-orange-600/10 rounded-2xl flex items-center justify-center mb-8 border border-orange-500/20 shadow-inner">
                 <Phone className="text-orange-500 dark:text-orange-400" size={32} />
               </div>
@@ -458,11 +557,23 @@ export default function App() {
               <form className="space-y-4 max-w-md" onSubmit={(e) => e.preventDefault()}>
                 <div>
                   <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-2">Name</label>
-                  <input type="text" className="w-full bg-white dark:bg-neutral-950 border border-neutral-300 dark:border-neutral-800 rounded-xl px-4 py-3 text-neutral-900 dark:text-white focus:outline-none focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/50 transition-all" placeholder="John Doe" />
+                  <input 
+                    type="text" 
+                    value={contactName}
+                    onChange={(e) => setContactName(e.target.value)}
+                    className="w-full bg-white dark:bg-neutral-950 border border-neutral-300 dark:border-neutral-800 rounded-xl px-4 py-3 text-neutral-900 dark:text-white focus:outline-none focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/50 transition-all" 
+                    placeholder="John Doe" 
+                  />
                 </div>
                 <div>
                   <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-2">Message</label>
-                  <textarea rows={4} className="w-full bg-white dark:bg-neutral-950 border border-neutral-300 dark:border-neutral-800 rounded-xl px-4 py-3 text-neutral-900 dark:text-white focus:outline-none focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/50 transition-all resize-none" placeholder="I'd love to learn more..." />
+                  <textarea 
+                    rows={4} 
+                    value={contactMessage}
+                    onChange={(e) => setContactMessage(e.target.value)}
+                    className="w-full bg-white dark:bg-neutral-950 border border-neutral-300 dark:border-neutral-800 rounded-xl px-4 py-3 text-neutral-900 dark:text-white focus:outline-none focus:border-orange-500/50 focus:ring-1 focus:ring-orange-500/50 transition-all resize-none" 
+                    placeholder="I'd love to learn more..." 
+                  />
                 </div>
                 <button className="w-full bg-orange-500 hover:bg-orange-600 dark:hover:bg-orange-400 text-white font-bold py-3 px-4 rounded-xl transition-colors mt-4">
                   Send Message
@@ -472,16 +583,16 @@ export default function App() {
           )}
 
           {currentScreen === 'settings' && (
-            <div ref={screenRef} className="bg-white/60 dark:bg-neutral-900/60 p-10 md:p-16 rounded-[2rem] border border-blue-200/50 dark:border-blue-800/20 shadow-2xl backdrop-blur-xl">
+            <div ref={screenRef} className="bg-white/60 dark:bg-neutral-900/60 p-6 sm:p-10 md:p-16 rounded-3xl md:rounded-[2rem] border border-blue-200/50 dark:border-blue-800/20 shadow-2xl backdrop-blur-xl">
               <div className="h-16 w-16 bg-gradient-to-br from-blue-500/20 to-blue-600/10 rounded-2xl flex items-center justify-center mb-8 border border-blue-500/20 shadow-inner">
                 <Settings className="text-blue-500 dark:text-blue-400" size={32} />
               </div>
-              <h2 className="text-4xl md:text-5xl font-extrabold text-neutral-900 dark:text-white mb-6 tracking-tight">Setup & Configure</h2>
-              <p className="text-lg text-neutral-600 dark:text-neutral-400 leading-relaxed mb-10 max-w-2xl">
-                Configure your API key and AI voice options here. Changes made to voices or API keys will require you to start a new session to take effect.
+              <h2 className="text-3xl md:text-5xl font-extrabold text-neutral-900 dark:text-white mb-4 md:mb-6 tracking-tight">Setup & Configure</h2>
+              <p className="text-base md:text-lg text-neutral-600 dark:text-neutral-400 leading-relaxed mb-8 md:mb-10 max-w-2xl">
+                Configure your API key and AI voice options here. Voice and language changes apply instantly! Changing the API key requires starting a new session.
               </p>
               
-              <div className="space-y-6 max-w-md">
+              <div className="space-y-6 max-w-full md:max-w-2xl">
                 <div className="bg-neutral-50 dark:bg-neutral-950 p-6 rounded-2xl border border-neutral-200 dark:border-neutral-800">
                   <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-3 flex items-center gap-2">
                     OpenAI Secret Key

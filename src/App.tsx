@@ -1,16 +1,25 @@
 import { useState, useRef, useEffect } from 'react';
-import { Home, Info, Play, Square, Phone, Settings, Menu, X, Sun, Moon } from 'lucide-react';
+import { Home, Info, Play, Square, Phone, Settings, Menu, X, Sun, Moon, Mic } from 'lucide-react';
+
+const LANGUAGES = [
+  "English", "Hindi", "Telugu", "Tamil", "Marathi", 
+  "Gujarati", "Bengali", "Kannada", "Malayalam", "Punjabi", "Odia"
+];
+
+const VOICES = [
+  "alloy", "ash", "ballad", "coral", "echo", "sage", "shimmer", "verse"
+];
 
 export default function App() {
   const [apiKey, setApiKey] = useState(() => {
     // Check localStorage first, otherwise fallback to env variable
     return localStorage.getItem('openai_api_key') || import.meta.env.VITE_OPENAI_API_KEY || '';
   });
-  const [isApiKeyModalOpen, setIsApiKeyModalOpen] = useState(!apiKey);
 
   const [isSessionActive, setIsSessionActive] = useState(false);
-  const [currentScreen, setCurrentScreen] = useState<'home' | 'about' | 'contact'>('home');
+  const [currentScreen, setCurrentScreen] = useState<'home' | 'about' | 'contact' | 'settings'>('home');
   const [language, setLanguage] = useState('English');
+  const [voice, setVoice] = useState('verse');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   const [error, setError] = useState<string | null>(null);
   
@@ -19,6 +28,7 @@ export default function App() {
   const pcRef = useRef<RTCPeerConnection | null>(null);
   const dcRef = useRef<RTCDataChannel | null>(null);
   const audioElementRef = useRef<HTMLAudioElement | null>(null);
+  const screenRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (theme === 'dark') {
@@ -28,8 +38,28 @@ export default function App() {
     }
   }, [theme]);
 
+  // GSAP Animation whenever screen changes
+  useEffect(() => {
+    if ((window as any).gsap && screenRef.current) {
+      const elements = screenRef.current.children;
+      (window as any).gsap.fromTo(
+        elements,
+        { opacity: 0, y: 20 },
+        { opacity: 1, y: 0, duration: 0.5, stagger: 0.1, ease: 'power2.out', clearProps: 'all' }
+      );
+    }
+  }, [currentScreen]);
+
   const toggleTheme = () => {
     setTheme(prev => prev === 'dark' ? 'light' : 'dark');
+  };
+
+  const saveSettings = () => {
+    if (apiKey.trim()) {
+      localStorage.setItem('openai_api_key', apiKey.trim());
+    }
+    setError(null);
+    setCurrentScreen('home');
   };
 
   const getInstructions = (lang: string) => {
@@ -38,7 +68,7 @@ export default function App() {
 
   const initSession = async () => {
     if (!apiKey) {
-      setIsApiKeyModalOpen(true);
+      setCurrentScreen('settings');
       setError("Please provide an OpenAI API key to start.");
       return;
     }
@@ -52,7 +82,7 @@ export default function App() {
         },
         body: JSON.stringify({
           model: "gpt-4o-realtime-preview-2024-12-17",
-          voice: "verse",
+          voice: voice,
           instructions: getInstructions(language),
           tools: [
             {
@@ -64,7 +94,7 @@ export default function App() {
                 properties: {
                   screen: {
                     type: "string",
-                    enum: ["home", "about", "contact"],
+                    enum: ["home", "about", "contact", "settings"],
                     description: "The name of the screen to navigate to."
                   }
                 },
@@ -117,8 +147,8 @@ export default function App() {
           if (serverEvent.type === 'response.function_call_arguments.done') {
             if (serverEvent.name === 'change_screen') {
               const args = JSON.parse(serverEvent.arguments);
-              if (args.screen === 'home' || args.screen === 'about' || args.screen === 'contact') {
-                setCurrentScreen(args.screen as 'home' | 'about' | 'contact');
+              if (args.screen === 'home' || args.screen === 'about' || args.screen === 'contact' || args.screen === 'settings') {
+                setCurrentScreen(args.screen as 'home' | 'about' | 'contact' | 'settings');
                 
                 dc.send(JSON.stringify({
                   type: "conversation.item.create",
@@ -219,7 +249,7 @@ export default function App() {
             content: [
               {
                 type: "input_text",
-                text: `The language has been changed to ${language}. Please acknowledge this and introduce yourself in ${language}.`
+                text: `The language has been changed to ${language}. Please acknowledge this and introduce yourself in ${language} without asking how to help.`
               }
             ]
           }
@@ -236,59 +266,6 @@ export default function App() {
       {/* Background decoration */}
       <div className="absolute top-[-20%] left-[-10%] w-[50%] h-[50%] bg-blue-500/10 dark:bg-blue-900/20 blur-[120px] rounded-full pointer-events-none" />
       <div className="absolute bottom-[-20%] right-[-10%] w-[40%] h-[40%] bg-purple-500/10 dark:bg-purple-900/20 blur-[120px] rounded-full pointer-events-none" />
-
-      {/* API Key Modal */}
-      {isApiKeyModalOpen && (
-        <div className="fixed inset-0 bg-neutral-950/80 backdrop-blur-md z-[100] flex items-center justify-center p-6 animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-neutral-900 p-8 md:p-10 rounded-3xl border border-neutral-200 dark:border-neutral-800 shadow-2xl max-w-md w-full relative ring-1 ring-white/10 dark:ring-white/5">
-            <button 
-              onClick={() => setIsApiKeyModalOpen(false)}
-              className="absolute top-6 right-6 p-2 text-neutral-400 hover:text-neutral-900 dark:hover:text-white rounded-xl transition-colors"
-            >
-              <X size={20} />
-            </button>
-            <h2 className="text-2xl font-bold text-neutral-900 dark:text-white mb-2">Configure API Key</h2>
-            <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-8 leading-relaxed">
-              We couldn't detect a built-in API key. To use the Realtime AI Navigator features, please enter your <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer" className="text-blue-500 hover:underline">OpenAI API Key</a>. It will be stored securely in your browser's local storage.
-            </p>
-            <div className="space-y-4">
-              <div>
-                <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-2">OpenAI Secret Key</label>
-                <input
-                  type="password"
-                  value={apiKey}
-                  onChange={(e) => setApiKey(e.target.value)}
-                  className="w-full bg-neutral-50 dark:bg-neutral-950 border border-neutral-300 dark:border-neutral-800 rounded-xl px-4 py-3 text-neutral-900 dark:text-white focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all"
-                  placeholder="sk-..."
-                />
-              </div>
-              <button
-                onClick={() => {
-                  if (apiKey.trim()) {
-                    localStorage.setItem('openai_api_key', apiKey.trim());
-                    setIsApiKeyModalOpen(false);
-                    setError(null);
-                  }
-                }}
-                disabled={!apiKey.trim()}
-                className="w-full bg-blue-500 hover:bg-blue-600 text-white font-bold py-3 px-4 rounded-xl transition-colors disabled:opacity-50 disabled:cursor-not-allowed mt-2"
-              >
-                Save & Continue
-              </button>
-            </div>
-            {apiKey && (
-              <div className="mt-6 pt-6 border-t border-neutral-200 dark:border-neutral-800 flex justify-center">
-                <button 
-                  onClick={() => setIsApiKeyModalOpen(false)}
-                  className="text-xs text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300 font-medium transition-colors"
-                >
-                  Cancel and Browse
-                </button>
-              </div>
-            )}
-          </div>
-        </div>
-      )}
 
       {/* Mobile Menu Overlay */}
       {isMobileMenuOpen && (
@@ -319,29 +296,12 @@ export default function App() {
             >
               <Phone size={20} /> Contact Us
             </button>
-
-            <div className="h-px bg-neutral-200 dark:bg-neutral-800 my-4"></div>
-            
-            <div className="text-xs font-bold text-neutral-500 uppercase tracking-wider mb-2">Language</div>
-            <div className="bg-neutral-100/50 dark:bg-neutral-900/50 p-2 rounded-xl border border-neutral-200 dark:border-neutral-800">
-              <select
-                value={language}
-                onChange={(e) => { setLanguage(e.target.value); setIsMobileMenuOpen(false); }}
-                className="w-full bg-transparent p-2 text-base text-neutral-900 dark:text-white font-medium focus:outline-none cursor-pointer outline-none"
-              >
-                <option value="English" className="bg-white dark:bg-neutral-900">English</option>
-                <option value="Hindi" className="bg-white dark:bg-neutral-900">Hindi</option>
-                <option value="Telugu" className="bg-white dark:bg-neutral-900">Telugu</option>
-                <option value="Tamil" className="bg-white dark:bg-neutral-900">Tamil</option>
-                <option value="Marathi" className="bg-white dark:bg-neutral-900">Marathi</option>
-                <option value="Gujarati" className="bg-white dark:bg-neutral-900">Gujarati</option>
-                <option value="Bengali" className="bg-white dark:bg-neutral-900">Bengali</option>
-                <option value="Kannada" className="bg-white dark:bg-neutral-900">Kannada</option>
-                <option value="Malayalam" className="bg-white dark:bg-neutral-900">Malayalam</option>
-                <option value="Punjabi" className="bg-white dark:bg-neutral-900">Punjabi</option>
-                <option value="Odia" className="bg-white dark:bg-neutral-900">Odia</option>
-              </select>
-            </div>
+            <button 
+              onClick={() => { setCurrentScreen('settings'); setIsMobileMenuOpen(false); }}
+              className={`flex items-center gap-4 px-4 py-4 rounded-xl transition-all ${currentScreen === 'settings' ? 'bg-neutral-900 text-white dark:bg-neutral-800 dark:text-white shadow-sm' : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800/50'}`}
+            >
+              <Settings size={20} /> Settings
+            </button>
           </div>
         </div>
       )}
@@ -356,7 +316,7 @@ export default function App() {
         <div className="flex items-center gap-4 md:gap-8 min-w-0">
           <div 
             className="flex items-center gap-2 md:gap-3 mr-0 md:mr-4 min-w-0 cursor-pointer group"
-            onClick={() => setIsApiKeyModalOpen(true)}
+            onClick={() => setCurrentScreen('settings')}
           >
             <div className={`h-8 w-8 md:h-10 md:w-10 rounded-xl flex-shrink-0 flex items-center justify-center bg-gradient-to-br transition-all group-hover:scale-105 ${isSessionActive ? 'from-green-500/20 to-green-600/10 border border-green-500/30' : 'from-blue-500/20 to-blue-600/10 border border-blue-500/30'}`}>
               <div className={`h-2 w-2 md:h-3 md:w-3 rounded-full ${isSessionActive ? 'bg-green-500 shadow-[0_0_15px_rgba(34,197,94,0.8)] animate-pulse' : 'bg-blue-500'}`} />
@@ -386,6 +346,12 @@ export default function App() {
             >
               <Phone size={16} /> Contact Us
             </button>
+            <button 
+              onClick={() => setCurrentScreen('settings')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${currentScreen === 'settings' ? 'bg-neutral-900 text-white dark:bg-neutral-800 dark:text-white shadow-sm' : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-200/50 dark:hover:bg-neutral-800/50'}`}
+            >
+              <Settings size={16} /> Settings
+            </button>
           </div>
         </div>
         
@@ -398,34 +364,6 @@ export default function App() {
           >
             {theme === 'dark' ? <Sun size={18} /> : <Moon size={18} />}
           </button>
-
-          <div className="flex items-center gap-2 group relative bg-neutral-100/50 dark:bg-neutral-900/50 p-1.5 rounded-xl border border-neutral-200 dark:border-neutral-800 hidden sm:flex">
-            <div className="pl-3 text-neutral-400">
-              <Settings size={16} />
-            </div>
-            <select
-              value={language}
-              onChange={(e) => setLanguage(e.target.value)}
-              className="bg-transparent pl-2 pr-8 py-1.5 text-sm text-neutral-700 dark:text-neutral-300 font-medium focus:outline-none cursor-pointer appearance-none outline-none"
-            >
-              <option value="English" className="bg-white dark:bg-neutral-900">English</option>
-              <option value="Hindi" className="bg-white dark:bg-neutral-900">Hindi</option>
-              <option value="Telugu" className="bg-white dark:bg-neutral-900">Telugu</option>
-              <option value="Tamil" className="bg-white dark:bg-neutral-900">Tamil</option>
-              <option value="Marathi" className="bg-white dark:bg-neutral-900">Marathi</option>
-              <option value="Gujarati" className="bg-white dark:bg-neutral-900">Gujarati</option>
-              <option value="Bengali" className="bg-white dark:bg-neutral-900">Bengali</option>
-              <option value="Kannada" className="bg-white dark:bg-neutral-900">Kannada</option>
-              <option value="Malayalam" className="bg-white dark:bg-neutral-900">Malayalam</option>
-              <option value="Punjabi" className="bg-white dark:bg-neutral-900">Punjabi</option>
-              <option value="Odia" className="bg-white dark:bg-neutral-900">Odia</option>
-            </select>
-            <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3 text-neutral-500">
-              <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
-              </svg>
-            </div>
-          </div>
 
           <button
             onClick={isSessionActive ? stopSession : initSession}
@@ -460,7 +398,7 @@ export default function App() {
         <div className="w-full max-w-4xl relative">
           
           {currentScreen === 'home' && (
-            <div className="bg-white/60 dark:bg-neutral-900/60 p-10 md:p-16 rounded-[2rem] border border-neutral-200/60 dark:border-neutral-800/60 shadow-2xl backdrop-blur-xl transform transition-all animate-in fade-in slide-in-from-bottom-8 duration-500">
+            <div ref={screenRef} className="bg-white/60 dark:bg-neutral-900/60 p-10 md:p-16 rounded-[2rem] border border-neutral-200/60 dark:border-neutral-800/60 shadow-2xl backdrop-blur-xl">
               <div className="h-16 w-16 bg-gradient-to-br from-blue-500/20 to-blue-600/10 rounded-2xl flex items-center justify-center mb-8 border border-blue-500/20 shadow-inner">
                 <Home className="text-blue-500 dark:text-blue-400" size={32} />
               </div>
@@ -484,7 +422,7 @@ export default function App() {
           )}
 
           {currentScreen === 'about' && (
-            <div className="bg-white/60 dark:bg-neutral-900/60 p-10 md:p-16 rounded-[2rem] border border-purple-200/50 dark:border-purple-800/20 shadow-2xl backdrop-blur-xl transform transition-all animate-in fade-in slide-in-from-bottom-8 duration-500">
+            <div ref={screenRef} className="bg-white/60 dark:bg-neutral-900/60 p-10 md:p-16 rounded-[2rem] border border-purple-200/50 dark:border-purple-800/20 shadow-2xl backdrop-blur-xl">
               <div className="h-16 w-16 bg-gradient-to-br from-purple-500/20 to-purple-600/10 rounded-2xl flex items-center justify-center mb-8 border border-purple-500/20 shadow-inner">
                 <Info className="text-purple-500 dark:text-purple-400" size={32} />
               </div>
@@ -508,7 +446,7 @@ export default function App() {
           )}
 
           {currentScreen === 'contact' && (
-            <div className="bg-white/60 dark:bg-neutral-900/60 p-10 md:p-16 rounded-[2rem] border border-orange-200/50 dark:border-orange-800/20 shadow-2xl backdrop-blur-xl transform transition-all animate-in fade-in slide-in-from-bottom-8 duration-500">
+            <div ref={screenRef} className="bg-white/60 dark:bg-neutral-900/60 p-10 md:p-16 rounded-[2rem] border border-orange-200/50 dark:border-orange-800/20 shadow-2xl backdrop-blur-xl">
               <div className="h-16 w-16 bg-gradient-to-br from-orange-500/20 to-orange-600/10 rounded-2xl flex items-center justify-center mb-8 border border-orange-500/20 shadow-inner">
                 <Phone className="text-orange-500 dark:text-orange-400" size={32} />
               </div>
@@ -530,6 +468,91 @@ export default function App() {
                   Send Message
                 </button>
               </form>
+            </div>
+          )}
+
+          {currentScreen === 'settings' && (
+            <div ref={screenRef} className="bg-white/60 dark:bg-neutral-900/60 p-10 md:p-16 rounded-[2rem] border border-blue-200/50 dark:border-blue-800/20 shadow-2xl backdrop-blur-xl">
+              <div className="h-16 w-16 bg-gradient-to-br from-blue-500/20 to-blue-600/10 rounded-2xl flex items-center justify-center mb-8 border border-blue-500/20 shadow-inner">
+                <Settings className="text-blue-500 dark:text-blue-400" size={32} />
+              </div>
+              <h2 className="text-4xl md:text-5xl font-extrabold text-neutral-900 dark:text-white mb-6 tracking-tight">Setup & Configure</h2>
+              <p className="text-lg text-neutral-600 dark:text-neutral-400 leading-relaxed mb-10 max-w-2xl">
+                Configure your API key and AI voice options here. Changes made to voices or API keys will require you to start a new session to take effect.
+              </p>
+              
+              <div className="space-y-6 max-w-md">
+                <div className="bg-neutral-50 dark:bg-neutral-950 p-6 rounded-2xl border border-neutral-200 dark:border-neutral-800">
+                  <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                    OpenAI Secret Key
+                  </label>
+                  <input
+                    type="password"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    className="w-full bg-white dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 rounded-xl px-4 py-3 text-neutral-900 dark:text-white focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all"
+                    placeholder="sk-..."
+                  />
+                  <p className="text-[10px] sm:text-xs text-neutral-500 dark:text-neutral-500 mt-2">
+                    Stored securely in your local browser storage. We never log or transmit this.
+                  </p>
+                </div>
+
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div className="bg-neutral-50 dark:bg-neutral-950 p-6 rounded-2xl border border-neutral-200 dark:border-neutral-800">
+                    <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-3">Language</label>
+                    <div className="relative">
+                      <select
+                        value={language}
+                        onChange={(e) => setLanguage(e.target.value)}
+                        className="w-full bg-white dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 rounded-xl px-4 py-3 text-neutral-900 dark:text-white focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all appearance-none cursor-pointer"
+                      >
+                        {LANGUAGES.map(lang => (
+                          <option key={lang} value={lang}>{lang}</option>
+                        ))}
+                      </select>
+                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-neutral-500">
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
+                        </svg>
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="bg-neutral-50 dark:bg-neutral-950 p-6 rounded-2xl border border-neutral-200 dark:border-neutral-800">
+                    <label className="block text-xs font-bold text-neutral-500 uppercase tracking-wider mb-3 flex items-center gap-2">
+                      <Mic size={14} /> AI Voice
+                    </label>
+                    <div className="relative">
+                      <select
+                        value={voice}
+                        onChange={(e) => setVoice(e.target.value)}
+                        className="w-full bg-white dark:bg-neutral-900 border border-neutral-300 dark:border-neutral-700 rounded-xl px-4 py-3 text-neutral-900 dark:text-white focus:outline-none focus:border-blue-500/50 focus:ring-1 focus:ring-blue-500/50 transition-all appearance-none cursor-pointer"
+                      >
+                        {VOICES.map(v => (
+                          <option key={v} value={v}>{v.charAt(0).toUpperCase() + v.slice(1)}</option>
+                        ))}
+                      </select>
+                      <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-4 text-neutral-500">
+                        <svg className="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M19 9l-7 7-7-7"></path>
+                        </svg>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                <div className="pt-4">
+                  <button 
+                    onClick={saveSettings}
+                    disabled={!apiKey.trim()}
+                    className="w-full bg-blue-500 hover:bg-blue-600 disabled:bg-neutral-400 disabled:cursor-not-allowed text-white font-bold py-3.5 px-6 rounded-xl transition-all shadow-lg active:scale-95 flex items-center justify-center gap-2"
+                  >
+                    Save & Return to Home
+                  </button>
+                </div>
+              </div>
+
             </div>
           )}
 

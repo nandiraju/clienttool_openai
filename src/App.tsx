@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect } from 'react';
-import { Home, Info, Play, Square, Phone, Settings, Menu, X, Sun, Moon, Mic } from 'lucide-react';
+import { Home, Info, Play, Square, Phone, Settings, Menu, X, Sun, Moon, Mic, Briefcase, Code, Award, Heart, User } from 'lucide-react';
 
 const LANGUAGES = [
   "English", "Hindi", "Telugu", "Tamil", "Marathi", 
@@ -17,7 +17,7 @@ export default function App() {
   });
 
   const [isSessionActive, setIsSessionActive] = useState(false);
-  const [currentScreen, setCurrentScreen] = useState<'home' | 'about' | 'contact' | 'settings'>('home');
+  const [currentScreen, setCurrentScreen] = useState<'home' | 'about' | 'contact' | 'settings' | 'profile'>('home');
   const [language, setLanguage] = useState('English');
   const [voice, setVoice] = useState('verse');
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -67,7 +67,11 @@ export default function App() {
   };
 
   const getInstructions = (lang: string) => {
-    return `You are a helpful assistant. You must ONLY converse in ${lang}. You can control the screen navigation via the \`change_screen\` tool, you can switch the visual theme between light and dark modes using the \`change_theme\` tool, and you can fill out the contact form automatically using the \`fill_contact_form\` tool. Respond succinctly without extra conversational filler. If a user asks to contact you, navigate them to the 'contact' screen first, then ask them for their name or message, and finally use the tool to populate the form on their screen.`;
+    return `You are a helpful AI assistant representing Srikanth Nandiraju, a CTO and Enterprise Architect. You must ONLY converse in ${lang}. 
+You can control the screen navigation via the \`change_screen\` tool.
+If the user asks about Srikanth's professional background, skills, experience, tech stack, certifications, or volunteer work, use the \`change_screen\` tool to navigate to the 'profile' screen and summarize the information.
+You can switch the visual theme between light and dark modes using the \`change_theme\` tool, and you can fill out the contact form automatically using the \`fill_contact_form\` tool. 
+If the user says goodbye, thanks, stop, or see you later, use the \`stop_session\` tool to end the conversation. Respond succinctly without extra conversational filler. If a user asks to contact you, navigate them to the 'contact' screen first, then ask them for their name or message, and finally use the tool to populate the form on their screen.`;
   };
 
   const initSession = async () => {
@@ -76,6 +80,10 @@ export default function App() {
       setError("Please provide an OpenAI API key to start.");
       return;
     }
+    
+    // GUARANTEE ONLY ONE ACTIVE SESSION
+    stopSession();
+    
     setError(null);
     try {
       const tokenResponse = await fetch("https://api.openai.com/v1/realtime/sessions", {
@@ -98,7 +106,7 @@ export default function App() {
                 properties: {
                   screen: {
                     type: "string",
-                    enum: ["home", "about", "contact", "settings"],
+                    enum: ["home", "about", "contact", "settings", "profile"],
                     description: "The name of the screen to navigate to."
                   }
                 },
@@ -138,6 +146,16 @@ export default function App() {
                   }
                 },
                 required: ["name", "message"]
+              }
+            },
+            {
+              type: "function",
+              name: "stop_session",
+              description: "Stop the current active voice session if the user says goodbye or wants to end the conversation.",
+              parameters: {
+                type: "object",
+                properties: {},
+                required: []
               }
             }
           ],
@@ -186,8 +204,8 @@ export default function App() {
           if (serverEvent.type === 'response.function_call_arguments.done') {
             if (serverEvent.name === 'change_screen') {
               const args = JSON.parse(serverEvent.arguments);
-              if (args.screen === 'home' || args.screen === 'about' || args.screen === 'contact' || args.screen === 'settings') {
-                setCurrentScreen(args.screen as 'home' | 'about' | 'contact' | 'settings');
+              if (["home", "about", "contact", "settings", "profile"].includes(args.screen)) {
+                setCurrentScreen(args.screen as any);
                 
                 dc.send(JSON.stringify({
                   type: "conversation.item.create",
@@ -228,6 +246,8 @@ export default function App() {
                 }
               }));
               dc.send(JSON.stringify({ type: "response.create" }));
+            } else if (serverEvent.name === 'stop_session') {
+              stopSession();
             }
           }
           
@@ -279,8 +299,11 @@ export default function App() {
       dcRef.current = null;
     }
     if (pcRef.current) {
-      pcRef.current.getSenders().forEach((sender) => {
+      pcRef.current.getSenders().forEach((sender: any) => {
         if (sender.track) sender.track.stop();
+      });
+      pcRef.current.getReceivers().forEach((receiver: any) => {
+        if (receiver.track) receiver.track.stop(); 
       });
       pcRef.current.close();
       pcRef.current = null;
@@ -396,6 +419,12 @@ export default function App() {
               <Phone size={20} /> Contact Us
             </button>
             <button 
+              onClick={() => { setCurrentScreen('profile'); setIsMobileMenuOpen(false); }}
+              className={`flex items-center gap-4 px-4 py-4 rounded-xl transition-all ${currentScreen === 'profile' ? 'bg-neutral-900 text-white dark:bg-neutral-800 dark:text-white shadow-sm' : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800/50'}`}
+            >
+              <User size={20} /> Profile
+            </button>
+            <button 
               onClick={() => { setCurrentScreen('settings'); setIsMobileMenuOpen(false); }}
               className={`flex items-center gap-4 px-4 py-4 rounded-xl transition-all ${currentScreen === 'settings' ? 'bg-neutral-900 text-white dark:bg-neutral-800 dark:text-white shadow-sm' : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-100 dark:hover:bg-neutral-800/50'}`}
             >
@@ -444,6 +473,12 @@ export default function App() {
               className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${currentScreen === 'contact' ? 'bg-neutral-900 text-white dark:bg-neutral-800 dark:text-white shadow-sm' : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-200/50 dark:hover:bg-neutral-800/50'}`}
             >
               <Phone size={16} /> Contact Us
+            </button>
+            <button 
+              onClick={() => setCurrentScreen('profile')}
+              className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-all ${currentScreen === 'profile' ? 'bg-neutral-900 text-white dark:bg-neutral-800 dark:text-white shadow-sm' : 'text-neutral-600 dark:text-neutral-400 hover:text-neutral-900 dark:hover:text-white hover:bg-neutral-200/50 dark:hover:bg-neutral-800/50'}`}
+            >
+              <User size={16} /> Profile
             </button>
             <button 
               onClick={() => setCurrentScreen('settings')}
@@ -661,6 +696,165 @@ export default function App() {
                   >
                     Save & Return to Home
                   </button>
+                </div>
+              </div>
+
+            </div>
+          )}
+
+          {currentScreen === 'profile' && (
+            <div ref={screenRef} className="bg-white/60 dark:bg-neutral-900/60 p-6 sm:p-10 md:p-16 rounded-3xl md:rounded-[2rem] border border-blue-200/50 dark:border-blue-800/20 shadow-2xl backdrop-blur-xl">
+              
+              {/* Header / Summary */}
+              <div className="flex flex-col md:flex-row gap-6 items-center md:items-start mb-12 text-center md:text-left">
+                <div className="h-32 w-32 md:h-40 md:w-40 flex-shrink-0 relative">
+                  <img 
+                    src={`${import.meta.env.BASE_URL}nsr.jpg`}
+                    alt="Srikanth Nandiraju" 
+                    className="w-full h-full object-cover rounded-full shadow-xl border-4 border-white/80 dark:border-neutral-800/80"
+                  />
+                  <div className="absolute inset-0 rounded-full shadow-inner pointer-events-none ring-1 ring-black/5 dark:ring-white/10"></div>
+                </div>
+                <div className="flex-1 mt-2 md:mt-4">
+                  <h2 className="text-3xl md:text-5xl font-extrabold text-neutral-900 dark:text-white mb-2">Srikanth Nandiraju</h2>
+                  <h3 className="text-lg md:text-xl font-bold text-blue-600 dark:text-blue-400 mb-4">Chief Technology Officer | AI & Multi-Omics Platforms | Enterprise Architect</h3>
+                  <p className="text-base text-neutral-600 dark:text-neutral-400 leading-relaxed max-w-3xl">
+                    Technology leader, software architect, and AI innovator with nearly three decades of experience building scalable enterprise systems, fintech platforms, AI-first products, and multi-omics healthcare solutions. Blends deep architectural expertise with strong product thinking.
+                  </p>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+                {/* Competencies */}
+                <div className="bg-neutral-50/80 dark:bg-neutral-950/50 p-6 sm:p-8 rounded-3xl border border-neutral-200 dark:border-neutral-800/50">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="p-2 bg-indigo-500/10 rounded-lg text-indigo-500"><Award size={20} /></div>
+                    <h3 className="text-xl font-bold text-neutral-900 dark:text-white">Core Competencies</h3>
+                  </div>
+                  <div className="space-y-6">
+                    <div>
+                      <h4 className="text-sm font-bold text-neutral-900 dark:text-white mb-2 uppercase tracking-wider">Architecture & Engineering</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {['Enterprise Solution Architecture', 'Distributed Systems', 'Identity & Federated', 'API & SDK Design', 'High-Performance Apps'].map(t => (
+                          <span key={t} className="px-3 py-1 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-full text-xs text-neutral-600 dark:text-neutral-400">{t}</span>
+                        ))}
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="text-sm font-bold text-neutral-900 dark:text-white mb-2 uppercase tracking-wider">AI & Emerging Tech</h4>
+                      <div className="flex flex-wrap gap-2">
+                        {['Generative AI & LLMs', 'Multi-Omics Platforms', 'NLP', 'Blockchain', 'IoT'].map(t => (
+                          <span key={t} className="px-3 py-1 bg-white dark:bg-neutral-900 border border-neutral-200 dark:border-neutral-800 rounded-full text-xs text-neutral-600 dark:text-neutral-400">{t}</span>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tech Stack */}
+                <div className="bg-neutral-50/80 dark:bg-neutral-950/50 p-6 sm:p-8 rounded-3xl border border-neutral-200 dark:border-neutral-800/50">
+                  <div className="flex items-center gap-3 mb-6">
+                    <div className="p-2 bg-cyan-500/10 rounded-lg text-cyan-500"><Code size={20} /></div>
+                    <h3 className="text-xl font-bold text-neutral-900 dark:text-white">Tech Stack</h3>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {['NextJS', 'React', 'Flutter', 'Expo', 'GPT/Claude', 'LangChain', 'WebRTC', 'Java/J2EE', 'REST APIs', 'Event-Driven Arch', 'HyperLedger', 'AWS/GCP'].map(tech => (
+                      <span key={tech} className="px-3 py-1.5 border border-cyan-200/50 dark:border-cyan-800/50 bg-cyan-50/50 dark:bg-cyan-900/10 text-cyan-700 dark:text-cyan-400 rounded-lg text-sm font-bold">
+                        {tech}
+                      </span>
+                    ))}
+                  </div>
+
+                  <div className="flex items-center gap-3 mb-6 mt-8">
+                    <div className="p-2 bg-yellow-500/10 rounded-lg text-yellow-500"><Award size={20} /></div>
+                    <h3 className="text-xl font-bold text-neutral-900 dark:text-white">Certifications</h3>
+                  </div>
+                  <ul className="space-y-2">
+                    {[
+                      "Generative AI (Microsoft/LinkedIn)",
+                      "Introduction to Responsible AI (Google)",
+                      "Certified Blockchain Architect",
+                      "Sun Certified Enterprise Architect"
+                    ].map((cert, idx) => (
+                      <li key={idx} className="flex items-start gap-3 text-sm text-neutral-600 dark:text-neutral-400">
+                        <span className="text-yellow-500 mt-0.5">•</span>
+                        <span>{cert}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              </div>
+
+              {/* Experience */}
+              <div className="bg-neutral-50/80 dark:bg-neutral-950/50 p-6 sm:p-8 rounded-3xl border border-neutral-200 dark:border-neutral-800/50 mb-8">
+                <div className="flex items-center gap-3 mb-8">
+                  <div className="p-2 bg-green-500/10 rounded-lg text-green-500"><Briefcase size={20} /></div>
+                  <h3 className="text-xl font-bold text-neutral-900 dark:text-white">Professional Experience</h3>
+                </div>
+                
+                <div className="space-y-6 relative before:absolute before:inset-0 before:ml-5 before:-translate-x-px md:before:mx-auto md:before:translate-x-0 before:h-full before:w-0.5 before:bg-gradient-to-b before:from-transparent before:via-neutral-300 dark:before:via-neutral-700 before:to-transparent">
+                  
+                  <div className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
+                    <div className="flex items-center justify-center w-10 h-10 rounded-full border border-white dark:border-neutral-900 bg-green-500 text-white shadow shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2">
+                      <Briefcase size={16} />
+                    </div>
+                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-5 rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-950 shadow-sm">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="font-bold text-neutral-900 dark:text-white text-lg">CTO @ 1Cell.Ai Inc.</div>
+                        <time className="text-xs font-bold text-green-500 bg-green-500/10 px-2 py-1 rounded-md mb-auto md:mb-0">2025 - Present</time>
+                      </div>
+                      <div className="text-sm text-neutral-600 dark:text-neutral-400">Leading development of AI-first precision oncology platforms, integrating multi-omics data with computational biology.</div>
+                    </div>
+                  </div>
+
+                  <div className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
+                    <div className="flex items-center justify-center w-10 h-10 rounded-full border border-white dark:border-neutral-900 bg-neutral-300 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2">
+                      <Briefcase size={16} />
+                    </div>
+                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-5 rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900/40 shadow-sm transition-all hover:bg-neutral-50 dark:hover:bg-neutral-900">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="font-bold text-neutral-900 dark:text-white text-lg">Director, Architecture @ Experian</div>
+                        <time className="text-xs font-bold text-neutral-500 bg-neutral-100 dark:bg-neutral-800 px-2 py-1 rounded-md mb-auto md:mb-0">2022 - 2025</time>
+                      </div>
+                      <div className="text-sm text-neutral-600 dark:text-neutral-400">Led high-performing global architecture teams and drove AI, cloud modernization, and platform initiatives.</div>
+                    </div>
+                  </div>
+
+                  <div className="relative flex items-center justify-between md:justify-normal md:odd:flex-row-reverse group is-active">
+                    <div className="flex items-center justify-center w-10 h-10 rounded-full border border-white dark:border-neutral-900 bg-neutral-300 dark:bg-neutral-800 text-neutral-600 dark:text-neutral-400 shrink-0 md:order-1 md:group-odd:-translate-x-1/2 md:group-even:translate-x-1/2">
+                      <Briefcase size={16} />
+                    </div>
+                    <div className="w-[calc(100%-4rem)] md:w-[calc(50%-2.5rem)] p-5 rounded-2xl border border-neutral-200 dark:border-neutral-800 bg-white dark:bg-neutral-900/40 shadow-sm transition-all hover:bg-neutral-50 dark:hover:bg-neutral-900">
+                      <div className="flex items-center justify-between mb-2">
+                        <div className="font-bold text-neutral-900 dark:text-white text-lg">Head of Engineering @ PayPal</div>
+                        <time className="text-xs font-bold text-neutral-500 bg-neutral-100 dark:bg-neutral-800 px-2 py-1 rounded-md mb-auto md:mb-0">2020 - 2022</time>
+                      </div>
+                      <div className="text-sm text-neutral-600 dark:text-neutral-400">Led iOS, Android, Web, and Platform engineering teams delivering scalable commerce services platforms.</div>
+                    </div>
+                  </div>
+                  
+                </div>
+              </div>
+
+              {/* Volunteer */}
+              <div className="bg-neutral-50/80 dark:bg-neutral-950/50 p-6 sm:p-8 rounded-3xl border border-neutral-200 dark:border-neutral-800/50">
+                <div className="flex items-center gap-3 mb-6">
+                  <div className="p-2 bg-rose-500/10 rounded-lg text-rose-500"><Heart size={20} /></div>
+                  <h3 className="text-xl font-bold text-neutral-900 dark:text-white">Volunteer & Social Impact</h3>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                  <div className="p-5 bg-white dark:bg-neutral-900/50 rounded-2xl border border-neutral-100 dark:border-neutral-800/80">
+                    <h4 className="font-bold text-neutral-900 dark:text-white mb-2 text-sm">WasteNoFood.org</h4>
+                    <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">Built iOS & Android food donation marketplace routing via geo-location and AWS REST APIs.</p>
+                  </div>
+                  <div className="p-5 bg-white dark:bg-neutral-900/50 rounded-2xl border border-neutral-100 dark:border-neutral-800/80">
+                    <h4 className="font-bold text-neutral-900 dark:text-white mb-2 text-sm">Touch-A-Life</h4>
+                    <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">Built full-stack mobile platform deployed to Google Cloud for student welfare systems.</p>
+                  </div>
+                  <div className="p-5 bg-white dark:bg-neutral-900/50 rounded-2xl border border-neutral-100 dark:border-neutral-800/80">
+                    <h4 className="font-bold text-neutral-900 dark:text-white mb-2 text-sm">Children's Discovery</h4>
+                    <p className="text-xs text-neutral-600 dark:text-neutral-400 leading-relaxed">Designed offline + online event fundraising platforms and QR-based payment flows.</p>
+                  </div>
                 </div>
               </div>
 

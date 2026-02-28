@@ -240,7 +240,13 @@ export default function App() {
       {/* API Key Modal */}
       {isApiKeyModalOpen && (
         <div className="fixed inset-0 bg-neutral-950/80 backdrop-blur-md z-[100] flex items-center justify-center p-6 animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-neutral-900 p-8 md:p-10 rounded-3xl border border-neutral-200 dark:border-neutral-800 shadow-2xl max-w-md w-full ring-1 ring-white/10 dark:ring-white/5">
+          <div className="bg-white dark:bg-neutral-900 p-8 md:p-10 rounded-3xl border border-neutral-200 dark:border-neutral-800 shadow-2xl max-w-md w-full relative ring-1 ring-white/10 dark:ring-white/5">
+            <button 
+              onClick={() => setIsApiKeyModalOpen(false)}
+              className="absolute top-6 right-6 p-2 text-neutral-400 hover:text-neutral-900 dark:hover:text-white rounded-xl transition-colors"
+            >
+              <X size={20} />
+            </button>
             <h2 className="text-2xl font-bold text-neutral-900 dark:text-white mb-2">Configure API Key</h2>
             <p className="text-sm text-neutral-600 dark:text-neutral-400 mb-8 leading-relaxed">
               We couldn't detect a built-in API key. To use the Realtime AI Navigator features, please enter your <a href="https://platform.openai.com/api-keys" target="_blank" rel="noreferrer" className="text-blue-500 hover:underline">OpenAI API Key</a>. It will be stored securely in your browser's local storage.
@@ -270,14 +276,16 @@ export default function App() {
                 Save & Continue
               </button>
             </div>
-            <div className="mt-6 pt-6 border-t border-neutral-200 dark:border-neutral-800 flex justify-center">
-              <button 
-                onClick={() => setIsApiKeyModalOpen(false)}
-                className="text-xs text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300 font-medium transition-colors"
-              >
-                Cancel and Browse
-              </button>
-            </div>
+            {apiKey && (
+              <div className="mt-6 pt-6 border-t border-neutral-200 dark:border-neutral-800 flex justify-center">
+                <button 
+                  onClick={() => setIsApiKeyModalOpen(false)}
+                  className="text-xs text-neutral-500 hover:text-neutral-700 dark:hover:text-neutral-300 font-medium transition-colors"
+                >
+                  Cancel and Browse
+                </button>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -346,13 +354,16 @@ export default function App() {
 
       <header className="flex-shrink-0 h-16 md:h-20 border-b border-neutral-200 dark:border-neutral-800 flex items-center px-4 md:px-8 justify-between bg-white/60 dark:bg-neutral-950/60 backdrop-blur-xl z-20">
         <div className="flex items-center gap-4 md:gap-8 min-w-0">
-          <div className="flex items-center gap-2 md:gap-3 mr-0 md:mr-4 min-w-0">
-            <div className={`h-8 w-8 md:h-10 md:w-10 rounded-xl flex-shrink-0 flex items-center justify-center bg-gradient-to-br ${isSessionActive ? 'from-green-500/20 to-green-600/10 border border-green-500/30' : 'from-blue-500/20 to-blue-600/10 border border-blue-500/30'}`}>
+          <div 
+            className="flex items-center gap-2 md:gap-3 mr-0 md:mr-4 min-w-0 cursor-pointer group"
+            onClick={() => setIsApiKeyModalOpen(true)}
+          >
+            <div className={`h-8 w-8 md:h-10 md:w-10 rounded-xl flex-shrink-0 flex items-center justify-center bg-gradient-to-br transition-all group-hover:scale-105 ${isSessionActive ? 'from-green-500/20 to-green-600/10 border border-green-500/30' : 'from-blue-500/20 to-blue-600/10 border border-blue-500/30'}`}>
               <div className={`h-2 w-2 md:h-3 md:w-3 rounded-full ${isSessionActive ? 'bg-green-500 shadow-[0_0_15px_rgba(34,197,94,0.8)] animate-pulse' : 'bg-blue-500'}`} />
             </div>
             <div className="flex flex-col min-w-0">
-              <h1 className="text-sm md:text-lg font-bold text-neutral-900 dark:text-white tracking-tight truncate">AI Navigator</h1>
-              <p className="text-[10px] md:text-xs text-neutral-500 dark:text-neutral-400 font-medium truncate">{isSessionActive ? 'Listening...' : 'Ready to connect'}</p>
+              <h1 className="text-sm md:text-lg font-bold text-neutral-900 dark:text-white tracking-tight truncate group-hover:text-blue-500 transition-colors">AI Navigator</h1>
+              <p className="text-[10px] md:text-xs text-neutral-500 dark:text-neutral-400 font-medium truncate group-hover:text-blue-500/70 transition-colors">{isSessionActive ? 'Listening...' : 'Ready to connect'}</p>
             </div>
           </div>
           
